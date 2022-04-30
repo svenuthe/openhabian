@@ -535,7 +535,11 @@ setup_mirror_SD() {
   fi
 
   infoText="$infoText1 $dest $infoText2"
-  srcSize="$(blockdev --getsize64 "$src")"
+  # calculate the src size by aggregating the src partitions
+  srcPartitionP1Size="$(fdisk -l ${src}p1 | head -1 | cut -d' ' -f5)"
+  srcPartitionP2Size="$(fdisk -l ${src}p2 | head -1 | cut -d' ' -f5)"
+  srcSize=$((srcPartitionP1Size + srcPartitionP2Size))
+
   minStorageSize="$((minStorageSize + srcSize))"    # to ensure we have at least 4GB for storage partition plus space for the main partitions
   destSize="$(blockdev --getsize64 "$dest")"
   if [[ "$destSize" -lt "$srcSize" ]]; then
@@ -557,7 +561,12 @@ setup_mirror_SD() {
   else
     if [[ "$destSize" -ge "$minStorageSize" ]]; then
       # create 3rd partition and filesystem on dest
-      start="$(fdisk -l /dev/mmcblk0 | head -1 | cut -d' ' -f5)"
+      # start at the seconds partition's end
+      startP2=$(cat /sys/block/mmcblk0/mmcblk0p2/start)
+      endP2Sector=$(($start+$(cat /sys/block/mmcblk0/mmcblk0p2/size)))
+
+      start="${endP2Sector}"
+      ((start*=512))
       ((destSize-=start))
       ((start/=512))
       destSizeSector=$destSize
